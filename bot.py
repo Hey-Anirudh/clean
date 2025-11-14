@@ -271,16 +271,19 @@ class AdvancedPyrogramCleaner(PyrogramChannelCleaner):
                 continue
         return success_count
 
-async def main():
+def main():
     """Main function to run the bot"""
-    # You need to get these from https://my.telegram.org/apps
-    API_ID = 21370037  # Replace with your API ID
-    API_HASH = "0b57036f40bb6da488d05b43e2d20dc1"  # Replace with your API HASH
-    BOT_TOKEN = "8309666031:AAGuAHKvoLY5Q43VOUPvqIbHxEBsUlc0_Ls"  # Replace with your bot token
-    
-    # Create and run bot
+    API_ID = 21370037
+    API_HASH = "0b57036f40bb6da488d05b43e2d20dc1"
+    BOT_TOKEN = "8309666031:AAGuAHKvoLY5Q43VOUPvqIbHxEBsUlc0_Ls"
+
     bot = PyrogramChannelCleaner(API_ID, API_HASH, BOT_TOKEN)
-    await bot.run()
+    bot.run()
+
+
+if __name__ == "__main__":
+    main()
+
 
 if __name__ == '__main__':
     asyncio.run(main())
