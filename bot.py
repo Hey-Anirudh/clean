@@ -1,10 +1,11 @@
 import logging
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from pyrogram.errors import FloodWait, MessageDeleteForbidden, MessageIdInvalid
+from pyrogram.errors import FloodWait, MessageDeleteForbidden
 import asyncio
 import time
 
+# Enable logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -20,149 +21,113 @@ class PyrogramChannelCleaner:
             bot_token=bot_token
         )
         self.setup_handlers()
-    
+
     def setup_handlers(self):
+
         @self.client.on_message(filters.command("start"))
         async def start_command(client, message: Message):
             await message.reply_text(
-                "🤖 Channel Cleaner Bot (Pyrogram)\n\n"
-                "Commands:\n"
-                "/clean @channel_username - Delete all messages from a channel\n"
-                "/clean @channel_username 100 - Delete last 100 messages\n"
-                "/clean_status - Check cleanup status\n\n"
-                "Note: The bot must be an admin in the channel with delete permissions."
+                "🤖 **Channel Cleaner Bot**\n\n"
+                "**Commands:**\n"
+                "`/clean <chat_id>` – Delete ALL messages\n"
+                "`/clean <chat_id> <limit>` – Delete last N messages\n\n"
+                "Example:\n"
+                "`/clean -1001234567890`\n"
+                "`/clean -1001234567890 300`\n"
             )
-        
+
         @self.client.on_message(filters.command("clean"))
         async def clean_command(client, message: Message):
-            try:
-                if len(message.command) < 2:
-                    await message.reply_text(
-                        "Usage:\n"
-                        "/clean @channel_username - Delete all messages\n"
-                        "/clean @channel_username 100 - Delete last 100 messages\n"
-                    )
-                    return
-                
-                channel_username = message.command[1]
-                limit = None
-                
-                if len(message.command) > 2:
-                    try:
-                        limit = int(message.command[2])
-                    except ValueError:
-                        await message.reply_text("❌ Invalid limit number!")
-                        return
-                
-                if channel_username.startswith('@'):
-                    channel_username = channel_username[1:]
-                
-                await self.clean_channel(client, message, channel_username, limit)
-                
-            except Exception as e:
-                logger.error(f"Error in clean command: {e}")
-                await message.reply_text(f"❌ Error: {str(e)}")
-        
-        @self.client.on_message(filters.command("clean_status"))
-        async def status_command(client, message: Message):
-            if hasattr(self, 'last_cleanup_status'):
-                status = self.last_cleanup_status
+
+            if len(message.command) < 2:
                 await message.reply_text(
-                    f"📊 Last Cleanup Status:\n"
-                    f"Channel: @{status['channel']}\n"
-                    f"Deleted: {status['deleted']} messages\n"
-                    f"Failed: {status['failed']} messages\n"
-                    f"Duration: {status['duration']:.2f} seconds"
+                    "Usage:\n"
+                    "`/clean <chat_id>`\n"
+                    "`/clean <chat_id> <limit>`"
                 )
-            else:
-                await message.reply_text("No cleanup operations recorded yet.")
-    
-    async def clean_channel(self, client, message: Message, channel_username: str, limit: int = None):
-        try:
-            try:
-                chat = await client.get_chat(channel_username)
-            except Exception:
-                await message.reply_text(
-                    f"❌ Cannot access channel @{channel_username}. Make sure:\n"
-                    "1. The channel exists\n"
-                    "2. Bot is added to the channel\n"
-                    "3. Bot has admin rights"
-                )
-                return
-            
-            if chat.type not in ["channel", "supergroup"]:
-                await message.reply_text("❌ This is not a channel or supergroup!")
                 return
 
             try:
-                member = await chat.get_member(client.me.id)
-                if not member.privileges or not member.privileges.can_delete_messages:
-                    await message.reply_text("❌ Bot doesn't have delete message permission!")
-                    return
+                chat_id = int(message.command[1])
             except:
-                await message.reply_text("❌ Cannot check bot permissions. Make sure bot is admin!")
+                await message.reply_text("❌ Invalid chat ID!")
                 return
-            
-            await message.reply_text(
-                f"🚀 Starting to clean messages from @{channel_username}...\n"
-                f"Limit: {'All messages' if not limit else f'Last {limit} messages'}"
-            )
-            
-            deleted_count = 0
-            failed_count = 0
-            start_time = time.time()
-            
-            async for msg in client.get_chat_history(chat.id, limit=limit):
+
+            limit = None
+            if len(message.command) > 2:
                 try:
-                    await msg.delete()
-                    deleted_count += 1
-                    
-                    if deleted_count % 50 == 0:
-                        await message.reply_text(f"✅ Progress: {deleted_count} messages deleted...")
-                    
-                    await asyncio.sleep(0.2)
-                    
-                except FloodWait as e:
-                    await message.reply_text(f"⏳ FloodWait: Waiting {e.value} sec...")
-                    await asyncio.sleep(e.value)
-                
-                except MessageDeleteForbidden:
-                    failed_count += 1
-                
-                except Exception:
-                    failed_count += 1
-            
-            duration = time.time() - start_time
-            
-            self.last_cleanup_status = {
-                'channel': channel_username,
-                'deleted': deleted_count,
-                'failed': failed_count,
-                'duration': duration
-            }
-            
-            await message.reply_text(
-                f"🎉 Cleanup completed!\n\n"
-                f"📊 Results:\n"
-                f"✅ Deleted: {deleted_count}\n"
-                f"❌ Failed: {failed_count}\n"
-                f"⏱️ Duration: {duration:.2f} sec\n"
-                f"📈 Speed: {deleted_count/duration:.2f} msg/sec"
-            )
-            
+                    limit = int(message.command[2])
+                except:
+                    await message.reply_text("❌ Invalid limit!")
+                    return
+
+            await self.clean_channel(client, message, chat_id, limit)
+
+    async def clean_channel(self, client, message: Message, chat_id: int, limit: int):
+
+        try:
+            chat = await client.get_chat(chat_id)
         except Exception as e:
-            logger.error(f"Error in clean_channel: {e}")
-            await message.reply_text(f"❌ Unexpected error: {str(e)}")
-    
+            await message.reply_text(
+                f"❌ Cannot access chat `{chat_id}`.\n"
+                "Make sure:\n"
+                "1. Chat exists\n"
+                "2. Bot is admin\n"
+                "3. Bot has delete rights"
+            )
+            return
+
+        # check permission
+        try:
+            member = await chat.get_member(client.me.id)
+            if not member.privileges or not member.privileges.can_delete_messages:
+                await message.reply_text("❌ Bot does not have permission to delete messages!")
+                return
+        except:
+            await message.reply_text("❌ Cannot check permissions.")
+            return
+
+        await message.reply_text(
+            f"🧹 **Cleaning chat:** `{chat_id}`\n"
+            f"Limit: {limit if limit else 'ALL messages'}"
+        )
+
+        deleted = 0
+        failed = 0
+        start = time.time()
+
+        async for msg in client.get_chat_history(chat_id, limit=limit):
+            try:
+                await msg.delete()
+                deleted += 1
+
+                if deleted % 50 == 0:
+                    await message.reply_text(f"✔ Deleted {deleted} messages...")
+
+                await asyncio.sleep(0.15)
+
+            except FloodWait as e:
+                await message.reply_text(f"⏳ FloodWait {e.value} sec")
+                await asyncio.sleep(e.value)
+            except MessageDeleteForbidden:
+                failed += 1
+            except Exception:
+                failed += 1
+
+        duration = time.time() - start
+
+        await message.reply_text(
+            f"🎉 **Cleanup Done!**\n\n"
+            f"🧹 Deleted: `{deleted}`\n"
+            f"⚠ Failed: `{failed}`\n"
+            f"⏳ Duration: `{duration:.2f} sec`"
+        )
+
     async def run(self):
         await self.client.start()
         print("Bot is running...")
+        await asyncio.Event().wait()  # Keep bot running
 
-        # Pyrogram has NO idle() → use wait()
-        try:
-            await asyncio.Event().wait()
-        except:
-            await self.client.stop()
 
 async def main():
     API_ID = 21370037
@@ -171,6 +136,7 @@ async def main():
 
     bot = PyrogramChannelCleaner(API_ID, API_HASH, BOT_TOKEN)
     await bot.run()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
